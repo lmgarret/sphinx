@@ -78,7 +78,7 @@ Options
 
 .. option:: --ext-autodoc
 
-   Enable `sphinx.ext.autodoc` extension.
+   Enable :py:mod:`sphinx.ext.autodoc` extension.
 
 .. option:: --ext-doctest
 
@@ -129,6 +129,9 @@ Options
 
    .. versionchanged:: 1.5
       make-mode is default.
+
+   .. versionchanged:: 7.3
+      Support for disabling the make-mode will be removed in Sphinx 8.
 
 .. option:: --makefile, --no-makefile
 

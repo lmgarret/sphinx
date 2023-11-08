@@ -6,11 +6,14 @@ import time
 
 import sphinx
 
+os.environ['SPHINX_AUTODOC_RELOAD_MODULES'] = '1'
+
 extensions = ['sphinx.ext.autodoc', 'sphinx.ext.doctest', 'sphinx.ext.todo',
               'sphinx.ext.autosummary', 'sphinx.ext.extlinks',
               'sphinx.ext.intersphinx',
-              'sphinx.ext.viewcode', 'sphinx.ext.inheritance_diagram']
-
+              'sphinx.ext.viewcode', 'sphinx.ext.inheritance_diagram',
+              'sphinx.ext.coverage']
+coverage_statistics_to_report = coverage_statistics_to_stdout = True
 templates_path = ['_templates']
 exclude_patterns = ['_build']
 
@@ -19,6 +22,7 @@ copyright = f'2007-{time.strftime("%Y")}, the Sphinx developers'
 version = sphinx.__display_version__
 release = version
 show_authors = True
+nitpicky = True
 
 html_theme = 'sphinx13'
 html_theme_path = ['_themes']
@@ -47,9 +51,9 @@ epub_pre_files = [('index.xhtml', 'Welcome')]
 epub_post_files = [('usage/installation.xhtml', 'Installing Sphinx'),
                    ('develop.xhtml', 'Sphinx development')]
 epub_exclude_files = ['_static/opensearch.xml', '_static/doctools.js',
-                      '_static/jquery.js', '_static/searchtools.js',
+                      '_static/searchtools.js',
                       '_static/sphinx_highlight.js',
-                      '_static/underscore.js', '_static/basic.css',
+                      '_static/basic.css',
                       '_static/language_data.js',
                       'search.html', '_static/websupport.js']
 epub_fix_images = False
@@ -70,6 +74,7 @@ latex_elements = {
 \DeclareUnicodeCharacter{229E}{\ensuremath{\boxplus}}
 \setcounter{tocdepth}{3}%    depth of what main TOC shows (3=subsubsection)
 \setcounter{secnumdepth}{1}% depth of section numbering
+\setlength{\tymin}{2cm}%     avoid too cramped table columns
 ''',
     # fix missing index entry due to RTD doing only once pdflatex after makeindex
     'printindex': r'''
@@ -77,16 +82,11 @@ latex_elements = {
              {\footnotesize\raggedright\printindex}
              {\begin{sphinxtheindex}\end{sphinxtheindex}}
 ''',
-    'sphinxsetup': """%
-VerbatimColor=black!5,% tests 5.3.0 extended syntax
-VerbatimBorderColor={RGB}{32,32,32},%
-pre_border-radius=3pt,%
-pre_box-decoration-break=slice,%
-""",
 }
 latex_show_urls = 'footnote'
 latex_use_xindy = True
-latex_table_style = ['booktabs', 'colorrows']
+
+linkcheck_timeout = 5
 
 autodoc_member_order = 'groupwise'
 autosummary_generate = False
@@ -127,10 +127,69 @@ intersphinx_mapping = {
 locale_dirs = ['locale/']
 gettext_compact = False
 
+nitpick_ignore = {
+    ('cpp:class', 'template<typename TOuter> template<typename TInner> Wrapper::Outer<TOuter>::Inner'),  # NoQA: E501
+    ('cpp:identifier', 'MyContainer'),
+    ('js:func', 'SomeError'),
+    ('js:func', 'number'),
+    ('js:func', 'string'),
+    ('py:attr', 'srcline'),
+    ('py:class', 'Element'),  # sphinx.domains.Domain
+    ('py:class', 'IndexEntry'),  # sphinx.domains.IndexEntry
+    ('py:class', 'Node'),  # sphinx.domains.Domain
+    ('py:class', 'NullTranslations'),  # gettext.NullTranslations
+    ('py:class', 'RoleFunction'),  # sphinx.domains.Domain
+    ('py:class', 'Theme'),  # sphinx.application.TemplateBridge
+    ('py:class', 'TitleGetter'),  # sphinx.domains.Domain
+    ('py:class', 'XRefRole'),  # sphinx.domains.Domain
+    ('py:class', 'docutils.nodes.Element'),
+    ('py:class', 'docutils.nodes.Node'),
+    ('py:class', 'docutils.nodes.NodeVisitor'),
+    ('py:class', 'docutils.nodes.TextElement'),
+    ('py:class', 'docutils.nodes.document'),
+    ('py:class', 'docutils.nodes.system_message'),
+    ('py:class', 'docutils.parsers.Parser'),
+    ('py:class', 'docutils.parsers.rst.states.Inliner'),
+    ('py:class', 'docutils.transforms.Transform'),
+    ('py:class', 'nodes.NodeVisitor'),
+    ('py:class', 'nodes.document'),
+    ('py:class', 'nodes.reference'),
+    ('py:class', 'pygments.lexer.Lexer'),
+    ('py:class', 'sphinx.directives.ObjDescT'),
+    ('py:class', 'sphinx.domains.IndexEntry'),
+    ('py:class', 'sphinx.ext.autodoc.Documenter'),
+    ('py:class', 'sphinx.errors.NoUri'),
+    ('py:class', 'sphinx.roles.XRefRole'),
+    ('py:class', 'sphinx.search.SearchLanguage'),
+    ('py:class', 'sphinx.theming.Theme'),
+    ('py:class', 'sphinxcontrib.websupport.errors.DocumentNotFoundError'),
+    ('py:class', 'sphinxcontrib.websupport.errors.UserNotAuthorizedError'),
+    ('py:exc', 'docutils.nodes.SkipNode'),
+    ('py:exc', 'sphinx.environment.NoUri'),
+    ('py:func', 'setup'),
+    ('py:func', 'sphinx.util.nodes.nested_parse_with_titles'),
+    # Error in sphinxcontrib.websupport.core::WebSupport.add_comment
+    ('py:meth', 'get_comments'),
+    ('py:mod', 'autodoc'),
+    ('py:mod', 'docutils.nodes'),
+    ('py:mod', 'docutils.parsers.rst.directives'),
+    ('py:mod', 'sphinx.ext'),
+    ('py:obj', 'sphinx.util.relative_uri'),
+    ('rst:role', 'c:any'),
+    ('std:confval', 'autodoc_inherit_docstring'),
+    ('std:confval', 'automodule_skip_lines'),
+    ('std:confval', 'autossummary_imported_members'),
+    ('std:confval', 'gettext_language_team'),
+    ('std:confval', 'gettext_last_translator'),
+    ('std:confval', 'globaltoc_collapse'),
+    ('std:confval', 'globaltoc_includehidden'),
+    ('std:confval', 'globaltoc_maxdepth'),
+}
+
 
 # -- Extension interface -------------------------------------------------------
 
-from sphinx import addnodes  # noqa
+from sphinx import addnodes  # noqa: E402
 
 event_sig_re = re.compile(r'([a-zA-Z-]+)\s*\((.*)\)')
 
@@ -154,7 +213,7 @@ def linkify_issues_in_changelog(app, docname, source):
     """ Linkify issue references like #123 in changelog to GitHub. """
 
     if docname == 'changes':
-        changelog_path = os.path.join(os.path.dirname(__file__), "../CHANGES")
+        changelog_path = os.path.join(os.path.dirname(__file__), "../CHANGES.rst")
         # this path trickery is needed because this script can
         # be invoked with different working directories:
         # * running make in docs/
@@ -165,11 +224,11 @@ def linkify_issues_in_changelog(app, docname, source):
 
         def linkify(match):
             url = 'https://github.com/sphinx-doc/sphinx/issues/' + match[1]
-            return '`{} <{}>`_'.format(match[0], url)
+            return f'`{match[0]} <{url}>`_'
 
         linkified_changelog = re.sub(r'(?:PR)?#([0-9]+)\b', linkify, changelog)
 
-        source[0] = source[0].replace('.. include:: ../CHANGES', linkified_changelog)
+        source[0] = source[0].replace('.. include:: ../CHANGES.rst', linkified_changelog)
 
 
 def setup(app):
@@ -180,17 +239,7 @@ def setup(app):
     app.add_object_type('confval', 'confval',
                         objname='configuration value',
                         indextemplate='pair: %s; configuration value')
-    app.add_object_type('setuptools-confval', 'setuptools-confval',
-                        objname='setuptools configuration value',
-                        indextemplate='pair: %s; setuptools configuration value')
     fdesc = GroupedField('parameter', label='Parameters',
                          names=['param'], can_collapse=True)
     app.add_object_type('event', 'event', 'pair: %s; event', parse_event,
                         doc_field_types=[fdesc])
-
-    # workaround for RTD
-    from sphinx.util import logging
-    logger = logging.getLogger(__name__)
-    app.info = lambda *args, **kwargs: logger.info(*args, **kwargs)
-    app.warn = lambda *args, **kwargs: logger.warning(*args, **kwargs)
-    app.debug = lambda *args, **kwargs: logger.debug(*args, **kwargs)

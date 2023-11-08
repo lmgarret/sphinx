@@ -1,17 +1,30 @@
 """Importer utilities for autodoc"""
 
+from __future__ import annotations
+
+import contextlib
 import importlib
+import os
+import sys
 import traceback
-import warnings
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, NamedTuple, Optional
+import typing
+from typing import TYPE_CHECKING, Any, Callable, NamedTuple
 
 from sphinx.ext.autodoc.mock import ismock, undecorate
 from sphinx.pycode import ModuleAnalyzer, PycodeError
 from sphinx.util import logging
-from sphinx.util.inspect import (getannotations, getmro, getslots, isclass, isenumclass,
-                                 safe_getattr)
+from sphinx.util.inspect import (
+    getannotations,
+    getmro,
+    getslots,
+    isclass,
+    isenumclass,
+    safe_getattr,
+)
 
 if TYPE_CHECKING:
+    from types import ModuleType
+
     from sphinx.ext.autodoc import ObjectMember
 
 logger = logging.getLogger(__name__)
@@ -21,14 +34,14 @@ def mangle(subject: Any, name: str) -> str:
     """Mangle the given name."""
     try:
         if isclass(subject) and name.startswith('__') and not name.endswith('__'):
-            return "_%s%s" % (subject.__name__, name)
+            return f"_{subject.__name__}{name}"
     except AttributeError:
         pass
 
     return name
 
 
-def unmangle(subject: Any, name: str) -> Optional[str]:
+def unmangle(subject: Any, name: str) -> str | None:
     """Unmangle the given name."""
     try:
         if isclass(subject) and not name.endswith('__'):
@@ -52,17 +65,28 @@ def import_module(modname: str, warningiserror: bool = False) -> Any:
     Call importlib.import_module(modname), convert exceptions to ImportError
     """
     try:
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=ImportWarning)
-            with logging.skip_warningiserror(not warningiserror):
-                return importlib.import_module(modname)
+        with logging.skip_warningiserror(not warningiserror):
+            return importlib.import_module(modname)
     except BaseException as exc:
         # Importing modules may cause any side effects, including
         # SystemExit, so we need to catch all errors.
         raise ImportError(exc, traceback.format_exc()) from exc
 
 
-def import_object(modname: str, objpath: List[str], objtype: str = '',
+def _reload_module(module: ModuleType, warningiserror: bool = False) -> Any:
+    """
+    Call importlib.reload(module), convert exceptions to ImportError
+    """
+    try:
+        with logging.skip_warningiserror(not warningiserror):
+            return importlib.reload(module)
+    except BaseException as exc:
+        # Importing modules may cause any side effects, including
+        # SystemExit, so we need to catch all errors.
+        raise ImportError(exc, traceback.format_exc()) from exc
+
+
+def import_object(modname: str, objpath: list[str], objtype: str = '',
                   attrgetter: Callable[[Any, str], Any] = safe_getattr,
                   warningiserror: bool = False) -> Any:
     if objpath:
@@ -76,7 +100,20 @@ def import_object(modname: str, objpath: List[str], objtype: str = '',
         objpath = list(objpath)
         while module is None:
             try:
+                original_module_names = frozenset(sys.modules)
                 module = import_module(modname, warningiserror=warningiserror)
+                if os.environ.get('SPHINX_AUTODOC_RELOAD_MODULES'):
+                    new_modules = [m for m in sys.modules if m not in original_module_names]
+                    # Try reloading modules with ``typing.TYPE_CHECKING == True``.
+                    try:
+                        typing.TYPE_CHECKING = True
+                        # Ignore failures; we've already successfully loaded these modules
+                        with contextlib.suppress(ImportError, KeyError):
+                            for m in new_modules:
+                                _reload_module(sys.modules[m])
+                    finally:
+                        typing.TYPE_CHECKING = False
+                    module = sys.modules[modname]
                 logger.debug('[autodoc] import %s => %r', modname, module)
             except ImportError as exc:
                 logger.debug('[autodoc] import %s => failed', modname)
@@ -115,7 +152,7 @@ def import_object(modname: str, objpath: List[str], objtype: str = '',
             errmsg = ('autodoc: failed to import %s %r from module %r' %
                       (objtype, '.'.join(objpath), modname))
         else:
-            errmsg = 'autodoc: failed to import %s %r' % (objtype, modname)
+            errmsg = f'autodoc: failed to import {objtype} {modname!r}'
 
         if isinstance(exc, ImportError):
             # import_module() raises ImportError having real exception obj and
@@ -141,15 +178,19 @@ class Attribute(NamedTuple):
     value: Any
 
 
-def get_object_members(subject: Any, objpath: List[str], attrgetter: Callable,
-                       analyzer: ModuleAnalyzer = None) -> Dict[str, Attribute]:
+def get_object_members(
+    subject: Any,
+    objpath: list[str],
+    attrgetter: Callable,
+    analyzer: ModuleAnalyzer | None = None,
+) -> dict[str, Attribute]:
     """Get members and attributes of target object."""
     from sphinx.ext.autodoc import INSTANCEATTR
 
     # the members directly defined in the class
     obj_dict = attrgetter(subject, '__dict__', {})
 
-    members: Dict[str, Attribute] = {}
+    members: dict[str, Attribute] = {}
 
     # enum members
     if isenumclass(subject):
@@ -165,11 +206,11 @@ def get_object_members(subject: Any, objpath: List[str], attrgetter: Callable,
 
     # members in __slots__
     try:
-        __slots__ = getslots(subject)
-        if __slots__:
+        subject___slots__ = getslots(subject)
+        if subject___slots__:
             from sphinx.ext.autodoc import SLOTSATTR
 
-            for name in __slots__:
+            for name in subject___slots__:
                 members[name] = Attribute(name, True, SLOTSATTR)
     except (TypeError, ValueError):
         pass
@@ -202,15 +243,15 @@ def get_object_members(subject: Any, objpath: List[str], attrgetter: Callable,
     return members
 
 
-def get_class_members(subject: Any, objpath: List[str], attrgetter: Callable,
-                      inherit_docstrings: bool = True) -> Dict[str, "ObjectMember"]:
+def get_class_members(subject: Any, objpath: Any, attrgetter: Callable,
+                      inherit_docstrings: bool = True) -> dict[str, ObjectMember]:
     """Get members and attributes of target class."""
     from sphinx.ext.autodoc import INSTANCEATTR, ObjectMember
 
     # the members directly defined in the class
     obj_dict = attrgetter(subject, '__dict__', {})
 
-    members: Dict[str, ObjectMember] = {}
+    members: dict[str, ObjectMember] = {}
 
     # enum members
     if isenumclass(subject):
@@ -226,11 +267,11 @@ def get_class_members(subject: Any, objpath: List[str], attrgetter: Callable,
 
     # members in __slots__
     try:
-        __slots__ = getslots(subject)
-        if __slots__:
+        subject___slots__ = getslots(subject)
+        if subject___slots__:
             from sphinx.ext.autodoc import SLOTSATTR
 
-            for name, docstring in __slots__.items():
+            for name, docstring in subject___slots__.items():
                 members[name] = ObjectMember(name, SLOTSATTR, class_=subject,
                                              docstring=docstring)
     except (TypeError, ValueError):

@@ -2,7 +2,7 @@
 
 /* Set master colours */
 :root {
-    --fonts-sans-serif: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    --fonts-sans-serif: system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
     --colour-sphinx-blue: #0A507A;
     --colour-text: #333;
     --colour-links-light: #057;
@@ -15,8 +15,29 @@ body {
 }
 
 .pageheader {
+    display: flex;
+    column-gap: 1em;
+    align-items: center;
+    width: 100%;
     background-color: var(--colour-sphinx-blue);
-    padding: 10px 15px;
+    padding: 10px 20px;
+}
+
+.pageheader a {
+    width: 5%;
+}
+
+.pageheader img {
+    filter: invert(1) drop-shadow(1px 1px 2px black);
+}
+
+.pageheader h1{
+    color: white;
+    margin: 0;
+    font-weight: 600;
+    font-size: 3.5rem;
+    line-height: 1;
+    font-variant: small-caps;
 }
 
 div.document {
@@ -68,6 +89,7 @@ div.sphinxsidebar {
     overflow-wrap: break-word;
     margin: 0;
     padding-right: 15px;
+    padding-top: 0.5em;
     font-size: 1em;
 }
 
@@ -125,6 +147,10 @@ div.sphinxsidebar li.current > a {
 
 .sphinxsidebar-navigation__contents > ul > li > a {
     display: none;
+}
+
+div.sphinxsidebar #searchbox {
+    margin: 12px 0 20px 0;
 }
 
 div.footer {

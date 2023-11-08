@@ -7,16 +7,31 @@ This is in its own module so that importing it is fast.  It should not
 import the main Sphinx modules (like sphinx.applications, sphinx.builders).
 """
 
+from __future__ import annotations
+
 import os
 import subprocess
 import sys
 from os import path
-from typing import List, Optional
+from typing import TYPE_CHECKING
 
 import sphinx
 from sphinx.cmd.build import build_main
-from sphinx.util.console import blue, bold, color_terminal, nocolor  # type: ignore
-from sphinx.util.osutil import cd, rmtree
+from sphinx.util.console import (  # type: ignore[attr-defined]
+    blue,
+    bold,
+    color_terminal,
+    nocolor,
+)
+from sphinx.util.osutil import rmtree
+
+try:
+    from contextlib import chdir  # type: ignore[attr-defined]
+except ImportError:
+    from sphinx.util.osutil import _chdir as chdir
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 BUILDERS = [
     ("",      "html",        "to make standalone HTML files"),
@@ -48,11 +63,10 @@ BUILDERS = [
 
 
 class Make:
-    def __init__(self, srcdir: str, builddir: str, opts: List[str]) -> None:
+    def __init__(self, srcdir: str, builddir: str, opts: Sequence[str]) -> None:
         self.srcdir = srcdir
         self.builddir = builddir
-        self.opts = opts
-        self.makecmd = os.environ.get('MAKE', 'make')  # refer $MAKE to determine make command
+        self.opts = [*opts]
 
     def builddir_join(self, *comps: str) -> str:
         return path.join(self.builddir, *comps)
@@ -84,18 +98,19 @@ class Make:
         print("Please use `make %s' where %s is one of" % ((blue('target'),) * 2))
         for osname, bname, description in BUILDERS:
             if not osname or os.name == osname:
-                print('  %s  %s' % (blue(bname.ljust(10)), description))
+                print(f'  {blue(bname.ljust(10))}  {description}')
 
     def build_latexpdf(self) -> int:
         if self.run_generic_build('latex') > 0:
             return 1
 
-        if sys.platform == 'win32':
-            makecmd = os.environ.get('MAKE', 'make.bat')
-        else:
-            makecmd = self.makecmd
+        # Use $MAKE to determine the make command
+        make_fallback = 'make.bat' if sys.platform == 'win32' else 'make'
+        makecmd = os.environ.get('MAKE', make_fallback)
+        if not makecmd.lower().startswith('make'):
+            raise RuntimeError('Invalid $MAKE command: %r' % makecmd)
         try:
-            with cd(self.builddir_join('latex')):
+            with chdir(self.builddir_join('latex')):
                 return subprocess.call([makecmd, 'all-pdf'])
         except OSError:
             print('Error: Failed to run: %s' % makecmd)
@@ -105,12 +120,13 @@ class Make:
         if self.run_generic_build('latex') > 0:
             return 1
 
-        if sys.platform == 'win32':
-            makecmd = os.environ.get('MAKE', 'make.bat')
-        else:
-            makecmd = self.makecmd
+        # Use $MAKE to determine the make command
+        make_fallback = 'make.bat' if sys.platform == 'win32' else 'make'
+        makecmd = os.environ.get('MAKE', make_fallback)
+        if not makecmd.lower().startswith('make'):
+            raise RuntimeError('Invalid $MAKE command: %r' % makecmd)
         try:
-            with cd(self.builddir_join('latex')):
+            with chdir(self.builddir_join('latex')):
                 return subprocess.call([makecmd, 'all-pdf'])
         except OSError:
             print('Error: Failed to run: %s' % makecmd)
@@ -119,11 +135,16 @@ class Make:
     def build_info(self) -> int:
         if self.run_generic_build('texinfo') > 0:
             return 1
+
+        # Use $MAKE to determine the make command
+        makecmd = os.environ.get('MAKE', 'make')
+        if not makecmd.lower().startswith('make'):
+            raise RuntimeError('Invalid $MAKE command: %r' % makecmd)
         try:
-            with cd(self.builddir_join('texinfo')):
-                return subprocess.call([self.makecmd, 'info'])
+            with chdir(self.builddir_join('texinfo')):
+                return subprocess.call([makecmd, 'info'])
         except OSError:
-            print('Error: Failed to run: %s' % self.makecmd)
+            print('Error: Failed to run: %s' % makecmd)
             return 1
 
     def build_gettext(self) -> int:
@@ -132,7 +153,7 @@ class Make:
             return 1
         return 0
 
-    def run_generic_build(self, builder: str, doctreedir: Optional[str] = None) -> int:
+    def run_generic_build(self, builder: str, doctreedir: str | None = None) -> int:
         # compatibility with old Makefile
         papersize = os.getenv('PAPER', '')
         opts = self.opts
@@ -148,7 +169,7 @@ class Make:
         return build_main(args + opts)
 
 
-def run_make_mode(args: List[str]) -> int:
+def run_make_mode(args: Sequence[str]) -> int:
     if len(args) < 3:
         print('Error: at least 3 arguments (builder, source '
               'dir, build dir) are required.', file=sys.stderr)

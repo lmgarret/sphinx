@@ -1,16 +1,21 @@
 """Allow reference sections by :ref: role using its title."""
 
-from typing import Any, Dict, cast
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, cast
 
 from docutils import nodes
-from docutils.nodes import Node
 
 import sphinx
-from sphinx.application import Sphinx
 from sphinx.domains.std import StandardDomain
 from sphinx.locale import __
 from sphinx.util import logging
 from sphinx.util.nodes import clean_astext
+
+if TYPE_CHECKING:
+    from docutils.nodes import Node
+
+    from sphinx.application import Sphinx
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +57,7 @@ def register_sections_as_label(app: Sphinx, document: Node) -> None:
         domain.labels[name] = docname, labelid, sectname
 
 
-def setup(app: Sphinx) -> Dict[str, Any]:
+def setup(app: Sphinx) -> dict[str, Any]:
     app.add_config_value('autosectionlabel_prefix_document', False, 'env')
     app.add_config_value('autosectionlabel_maxdepth', None, 'env')
     app.connect('doctree-read', register_sections_as_label)
